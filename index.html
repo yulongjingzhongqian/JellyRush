@@ -19,6 +19,7 @@ input,select{font-family:inherit;background:#1d1a3a;color:#f3f0ff;border:1px sol
 .overlay{position:fixed;inset:0;background:rgba(14,12,34,.94);overflow:auto;padding:22px 26px;z-index:10}
 .hidden{display:none!important}
 h1{margin:0;font-size:30px;letter-spacing:2px}
+#ver{font-size:12px;font-weight:400;letter-spacing:0;color:#a9a3d8;background:#2f2a55;border-radius:10px;padding:2px 8px;margin-left:10px;vertical-align:middle}
 h1 small{font-size:14px;font-weight:400;color:#a9a3d8;margin-left:10px;letter-spacing:0}
 .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0}
 .bar .sp{flex:1}
@@ -99,7 +100,7 @@ button,select,label{touch-action:manipulation}
 </div>
 
 <div id="setup" class="overlay">
-  <h1>果冻狂奔<small>全自动 · 随机 · 末位淘汰的横版大逃亡</small></h1>
+  <h1>果冻狂奔<span id="ver"></span><small>全自动 · 随机 · 末位淘汰的横版大逃亡</small></h1>
   <div class="bar">
     <button id="bAdd">＋ 添加选手</button>
     <button id="bRand">🎲 全部随机</button>
@@ -142,6 +143,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const $=id=>document.getElementById(id);
 
 // ================= 常量与数据 =================
+const VERSION='1.0.0'; // 每次发布时手动递增
 const V0=300, GRAV=1800, RAD=17, DT=1/60;
 const GRACE=12, TB=165, HARD=205, ABS=240, POINTS=30;
 const ATTRS=[['spd','速度'],['acc','爆发'],['jmp','跳跃'],['sta','耐力'],['bal','稳定'],['luk','幸运']];
@@ -718,6 +720,48 @@ function render(g){
     if(b.sub){c.font=`bold ${Math.max(13,fs*0.44)}px "Microsoft YaHei",sans-serif`;c.lineWidth=4;c.strokeText(b.sub,VW/2,by+fs*0.75);c.fillStyle='#fff';c.fillText(b.sub,VW/2,by+fs*0.75)}c.globalAlpha=1}
 }
 
+// ================= 战前出场动画 =================
+// 时间线：选手逐个砸入（间隔 introSt）→ 全员到齐后标题横幅冲入 → 淡出进入倒计时
+function introInit(g){const N=g.rs.length;g.introSt=clamp(2.6/N,0.1,0.3);g.introAll=0.3+N*g.introSt+0.25;g.introDur=g.introAll+1.5;g.intro=0;g.introHit=0;g.introHitT=-9;g.introTitle=false}
+function introTick(g,real){
+  g.intro+=real;const N=g.rs.length;
+  while(g.introHit<N&&g.intro>=0.3+g.introHit*g.introSt+0.2){g.introHit++;g.introHitT=g.intro;if(!muted)tone(120+g.introHit%3*18,0.13,'square',0.07,48)}
+  if(!g.introTitle&&g.intro>=g.introAll){g.introTitle=true;g.introHitT=g.intro;sfx(g,'event');if(!muted)tone(70,0.5,'sawtooth',0.1,35)}
+}
+function drawIntro(g){
+  const c=ctx,t=g.intro,N=g.rs.length,D=g.introDur,st=g.introSt,allIn=g.introAll,out=clamp((t-(D-0.35))/0.35,0,1);
+  const ease=p=>1-Math.pow(1-clamp(p,0,1),3);
+  c.setTransform(DPR,0,0,DPR,0,0);c.globalAlpha=1-out;
+  const bg=c.createLinearGradient(0,0,VW,VH);bg.addColorStop(0,'rgba(22,14,52,.95)');bg.addColorStop(1,'rgba(56,14,40,.95)');c.fillStyle=bg;c.fillRect(0,0,VW,VH);
+  c.fillStyle='rgba(255,255,255,.05)';for(let k=0;k<14;k++){const x=((k*263+t*900)%(VW+700))-350,w=40+k%4*30;c.beginPath();c.moveTo(x,0);c.lineTo(x+w,0);c.lineTo(x+w-VH*0.35,VH);c.lineTo(x-VH*0.35,VH);c.fill()}
+  // 网格：按屏幕宽高比决定列数
+  let cols=clamp(Math.ceil(Math.sqrt(N*VW/VH*0.75)),1,N);const rows=Math.ceil(N/cols);cols=Math.ceil(N/rows);
+  const cell=Math.min(VW*0.94/cols,VH*0.62/rows,230),since=t-g.introHitT,sh=since<0.16?(1-since/0.16)*10:0;
+  c.save();c.translate(VW/2+(Math.random()-0.5)*sh,VH*0.41+(Math.random()-0.5)*sh);c.scale(1+out*0.25,1+out*0.25);
+  g.rs.forEach((r,i)=>{const p=(t-0.3-i*st)/0.28;if(p<0)return;
+    const row=Math.floor(i/cols),col=i%cols,inRow=row===rows-1?N-row*cols:cols,e=ease(p);
+    const w=cell*0.84,h=cell*0.86,sk=w*0.12,k=1+(1-e)*1.9;
+    c.save();c.translate((col-(inRow-1)/2)*cell,(row-(rows-1)/2)*cell+(1-e)*-cell*0.5);c.globalAlpha=(1-out)*clamp(p*4,0,1);c.scale(k,k);
+    const panel=()=>{c.beginPath();c.moveTo(-w/2+sk,-h/2);c.lineTo(w/2+sk,-h/2);c.lineTo(w/2-sk,h/2);c.lineTo(-w/2-sk,h/2);c.closePath()};
+    panel();const pg=c.createLinearGradient(0,-h/2,0,h/2);pg.addColorStop(0,shade(r.color,-5));pg.addColorStop(1,shade(r.color,-120));c.fillStyle=pg;c.fill();c.strokeStyle='#fff';c.lineWidth=Math.max(2,cell*0.022);c.lineJoin='round';c.stroke();
+    c.save();panel();c.clip();c.fillStyle='rgba(255,255,255,.1)';for(let j=-2;j<3;j++){c.beginPath();c.moveTo(j*w*0.3,-h/2);c.lineTo(j*w*0.3+w*0.12,-h/2);c.lineTo(j*w*0.3-w*0.2,h/2);c.lineTo(j*w*0.3-w*0.32,h/2);c.fill()}c.restore();
+    const sc=cell/84;c.save();c.translate(0,h*0.22);c.scale(sc,sc);drawJelly(c,r.style==='sanguo'||r.style==='shuihu'?7:-3,0,{color:r.color,shape:r.shape,hat:r.hat,style:r.style,d:r.d,leg:t*10+i,face:t>allIn?'happy':'n',sy:1+Math.sin(t*10+i)*0.04});c.restore();
+    const fs=clamp(cell*0.15,11,28);c.font=`bold ${fs}px "Microsoft YaHei",sans-serif`;c.textAlign='center';c.textBaseline='middle';c.lineWidth=fs*0.3;c.strokeStyle='#120e28';
+    c.strokeText(fullName(r),0,h*0.36,w*0.92);c.fillStyle='#fff';c.fillText(fullName(r),0,h*0.36,w*0.92);
+    if(cell>=96){const f2=fs*0.6;c.font=`bold ${f2}px "Microsoft YaHei",sans-serif`;c.lineWidth=f2*0.3;c.textAlign='right';const tx=w/2+sk-f2*0.7,ty=-h/2+f2*1.1;c.strokeText(TRAITS[r.trait][0],tx,ty);c.fillStyle='#ffe066';c.fillText(TRAITS[r.trait][0],tx,ty);c.textAlign='center'}
+    if(p<1){panel();c.fillStyle=`rgba(255,255,255,${(1-p)*0.85})`;c.fill()}
+    c.restore()});
+  c.restore();
+  // 标题横幅
+  if(t>allIn){const q=ease((t-allIn)/0.22),by=VH*0.86,bh=clamp(VH*0.16,64,130),fs=clamp(VW/17,20,54),ox=(1-q)*-VW;
+    c.fillStyle='#ff7a59';c.beginPath();c.moveTo(ox-40,by-bh/2);c.lineTo(ox+VW+60,by-bh/2);c.lineTo(ox+VW+20,by+bh/2);c.lineTo(ox-80,by+bh/2);c.fill();
+    c.fillStyle='#ffd34d';c.fillRect(ox-80,by+bh/2,VW+160,5);
+    c.textAlign='center';c.textBaseline='middle';c.font=`900 ${fs}px "Microsoft YaHei",sans-serif`;c.fillStyle='#2a1208';c.fillText(`${N} 人大逃亡　${g.map.n}`,VW/2+ox,by-bh*0.14,VW*0.94);
+    c.font=`bold ${Math.max(13,fs*0.4)}px "Microsoft YaHei",sans-serif`;c.fillStyle='#fff';c.fillText('只有一个能活到最后',VW/2+ox,by+bh*0.27);
+    const fl=1-(t-allIn)/0.22;if(fl>0){c.fillStyle=`rgba(255,255,255,${fl*0.7})`;c.fillRect(0,0,VW,VH)}}
+  c.globalAlpha=1;
+}
+
 // ================= HUD =================
 function hud(g,real){
   g.hudT-=real;g.msgT-=real;
@@ -799,8 +843,8 @@ function startGame(seedStr){
   game.seedLabel=esc(seedStr);if(game.duel)game.duel.x0=game.leadX;
   paused=false;$('bPause').textContent='暂停';document.body.classList.toggle('watch',watchMode);
   if(watchMode){speedMul=1;$('bSpeed').textContent='1×'}
-  game.banner={text:game.map.n,sub:'',t:5,col:'#fff'};
-  $('setup').classList.add('hidden');$('result').classList.add('hidden');$('hud').classList.remove('hidden');$('cmt').style.opacity=0;
+  introInit(game);$('hud').classList.add('hidden');
+  $('setup').classList.add('hidden');$('result').classList.add('hidden');$('cmt').style.opacity=0;
   say(game,`比赛开始！${game.rs.length} 名选手，最后只能留下一个！`);
 }
 function showResult(g){
@@ -822,13 +866,15 @@ function frame(ts){
   if(g){
     let sc=0;
     if(!paused){g.real+=real;
-      if(g.pre>0){const b=Math.ceil(g.pre-0.4);g.pre-=real;const n=Math.ceil(g.pre-0.4);if(n!==b)sfx(g,n>=1?'beep':'go')}
+      if(g.intro<g.introDur){introTick(g,real);if(g.intro>=g.introDur)$('hud').classList.remove('hidden')}
+      else if(g.pre>0){const b=Math.ceil(g.pre-0.4);g.pre-=real;const n=Math.ceil(g.pre-0.4);if(n!==b)sfx(g,n>=1?'beep':'go')}
       else{sc=speedMul*(g.slow>0?0.3:1);g.slow-=real;g.acc+=real*sc;let n=0;while(g.acc>=DT&&n<14){step(g,DT);startDuelHook(g);g.acc-=DT;n++}if(n>=14)g.acc=0;
         if(g.over){g.overT+=real;if(g.overT>3.2&&!g.shown){g.shown=true;showResult(g)}
           if(Math.random()<0.5)burst(g,g.winner.x+(Math.random()-0.5)*500,g.winner.y-320,`hsl(${Math.random()*360},90%,65%)`,4,160,500)}}
       updateCam(g,real);updFx(g,real*sc,real);
     }
-    render(g);if(!g.shown)hud(g,paused?0:real);
+    render(g);if(g.intro<g.introDur){drawIntro(g);requestAnimationFrame(frame);return}
+    if(!g.shown)hud(g,paused?0:real);
     else if(watchMode&&!paused){g.nextT-=real;$('nextIn').textContent=`${Math.max(1,Math.ceil(g.nextT))} 秒后自动开始下一局（Esc 或双击屏幕返回设定）`;if(g.nextT<=0)startGame(null)}
   }
   requestAnimationFrame(frame);
@@ -839,7 +885,11 @@ $('bMute').onclick=()=>{muted=!muted;$('bMute').textContent=muted?'🔇':'🔊'}
 $('bQuit').onclick=$('bBack').onclick=quitGame;
 $('bAgain').onclick=()=>startGame(null);
 $('bReplay').onclick=()=>startGame(lastSeed);
-window.addEventListener('keydown',e=>{if(e.code==='Escape'&&game){quitGame();return}if(e.code==='Space'&&game&&e.target.tagName!=='INPUT'){e.preventDefault();$('bPause').click()}});
+// 出场动画可跳过：点击屏幕，或按空格 / 回车（纯观赏模式下不响应点击，避免与双击退出冲突）
+const skipIntro=()=>{if(game&&game.intro<game.introDur){game.intro=game.introDur;$('hud').classList.remove('hidden');return true}return false};
+cv.addEventListener('pointerdown',()=>{if(!watchMode)skipIntro()});
+window.addEventListener('keydown',e=>{if(e.code==='Escape'&&game){quitGame();return}
+  if((e.code==='Space'||e.code==='Enter')&&e.target.tagName!=='INPUT'&&skipIntro()){e.preventDefault();return}if(e.code==='Space'&&game&&e.target.tagName!=='INPUT'){e.preventDefault();$('bPause').click()}});
 
 // 触屏没有 Esc：纯观赏模式下双击（双触）屏幕返回设定
 {let lastTap=0;window.addEventListener('pointerdown',()=>{if(!game||!watchMode)return;const now=performance.now();if(now-lastTap<380){lastTap=0;quitGame()}else lastTap=now})}
@@ -857,6 +907,7 @@ window.simulate=function(n,count,mapKey){
 try{const p=localStorage.getItem('jellyPack');if(p==='mix'||PACKS[p])curPack=p;
   const s=JSON.parse(localStorage.getItem('jellyRoster'));s.forEach(r=>{r.style=r.style||'jelly';r.d=r.d||{}});
   if(Array.isArray(s)&&s.length>=2&&s.every(r=>r&&r.a&&TRAITS[r.trait]&&HATS[r.hat]&&SHAPES[r.shape]&&PACKS[r.style]&&(r.style==='jelly'||PACKS[r.style].list[r.ci])))roster=s.slice(0,16)}catch(e){}
+$('ver').textContent='v'+VERSION;
 bindSetup();
 if(roster.length<2){roster=[];setCount(8)}else renderSetup();
 requestAnimationFrame(frame);
