@@ -577,7 +577,7 @@ function step(g,dt){
 // ================= 渲染 =================
 const cv=$('cv'),ctx=cv.getContext('2d'),nightCv=document.createElement('canvas'),nctx=nightCv.getContext('2d');
 let VW=0,VH=0,DPR=1;
-function resize(){DPR=Math.min(2,window.devicePixelRatio||1);VW=window.innerWidth;VH=window.innerHeight;cv.width=VW*DPR;cv.height=VH*DPR;nightCv.width=VW;nightCv.height=VH}
+function resize(){DPR=Math.min(2,window.devicePixelRatio||1);VW=window.innerWidth;VH=window.innerHeight;cv.width=Math.round(VW*DPR);cv.height=Math.round(VH*DPR);nightCv.width=VW;nightCv.height=VH}
 window.addEventListener('resize',resize);resize();
 const SKY=[[[110,190,255],[214,243,255]],[[150,130,225],[255,205,170]],[[40,36,96],[196,110,150]]];
 function skyCol(t,SKY){const p=clamp(t/85,0,1.999),i=Math.floor(p),f=p-i,m=(a,b)=>`rgb(${a.map((v,k)=>Math.round(lerp(v,b[k],f))).join(',')})`;return [m(SKY[i][0],SKY[i+1][0]),m(SKY[i][1],SKY[i+1][1])]}
@@ -692,19 +692,22 @@ function render(g){
     c.drawImage(nightCv,0,0)}
   if(g.ev&&g.ev.type==='wind'){c.strokeStyle='rgba(255,255,255,.35)';c.lineWidth=2;for(let k=0;k<16;k++){const sp=g.ev.dir*900,x=(((T*sp+k*211)%(VW+200))+VW+200)%(VW+200)-100,y=(k*97)%VH;c.beginPath();c.moveTo(x,y);c.lineTo(x-80*g.ev.dir,y);c.stroke()}}
   // 名牌
-  c.textAlign='center';c.textBaseline='alphabetic';c.font='bold 12px "Microsoft YaHei",sans-serif';c.lineWidth=3;c.strokeStyle='rgba(20,15,40,.85)';
-  const placed=[];
-  for(const r of g.rank){if(r.state==='rescue')continue;const x=sX(r.x);let y=sY(r.y-RAD*2-18)-4;
-    for(let k=0;k<6;k++){let hit=false;for(const p of placed)if(Math.abs(p[0]-x)<42&&Math.abs(p[1]-y)<13){hit=true;break}if(!hit)break;y-=14}
-    placed.push([x,y]);
+  c.textAlign='center';c.textBaseline='alphabetic';c.font='bold 13px "Microsoft YaHei",sans-serif';c.lineWidth=3;c.lineJoin='round';c.strokeStyle='#161230';
+  // 文字对齐到物理像素，避免每帧落在不同的亚像素位置而发虚；避让顺序按选手编号固定，
+  // 避让高度平滑过渡，避免名次交替时名牌上下跳动
+  const snap=v=>Math.round(v*DPR)/DPR,placed=[];
+  for(const r of g.rs){if(!r.alive||r.state==='rescue')continue;const x=snap(sX(r.x)),y0=sY(r.y-RAD*2-18)-4;let off=0;
+    for(let k=0;k<6;k++){let hit=false;for(const p of placed)if(Math.abs(p[0]-x)<46&&Math.abs(p[1]-(y0-off))<14){hit=true;break}if(!hit)break;off+=15}
+    placed.push([x,y0-off]);r.lblOff=r.lblOff==null?off:r.lblOff+(off-r.lblOff)*0.2;const y=snap(y0-r.lblOff);
     if(x>VW-6){const yy=clamp(sY(r.y-20),80,VH-60);c.fillStyle=r.color;c.beginPath();c.moveTo(VW-4,yy);c.lineTo(VW-18,yy-9);c.lineTo(VW-18,yy+9);c.fill();c.textAlign='right';c.strokeText(r.name,VW-22,yy+4);c.fillStyle='#fff';c.fillText(r.name,VW-22,yy+4);c.textAlign='center';continue}
-    const tag=(r.rank===1&&g.aliveN>1?'★ ':'')+r.name;c.strokeText(tag,x,y);c.fillStyle=r.rank===1?'#ffe066':'#fff';c.fillText(tag,x,y)}
+    const lead=r.rank===1&&g.aliveN>1;c.strokeText(r.name,x,y);c.fillStyle=lead?'#ffe066':'#fff';c.fillText(r.name,x,y);
+    if(lead){if(r.tagW==null)r.tagW=c.measureText(r.name).width;const sx2=snap(x-r.tagW/2-9);c.strokeText('★',sx2,y);c.fillText('★',sx2,y)}}
   // 裁决准星
   if(!g.duel&&!g.over&&g.t>=GRACE&&g.timer<3&&g.rank.length>1){const v=g.rank[g.rank.length-1],x=sX(v.x),y=sY(v.y-RAD),rr=30+g.timer*14;c.strokeStyle='#ff3b3b';c.lineWidth=3;c.beginPath();c.arc(x,y,rr,0,6.2832);c.moveTo(x-rr-8,y);c.lineTo(x-rr+10,y);c.moveTo(x+rr+8,y);c.lineTo(x+rr-10,y);c.moveTo(x,y-rr-8);c.lineTo(x,y-rr+10);c.moveTo(x,y+rr+8);c.lineTo(x,y+rr-10);c.stroke();
     c.font='bold 22px sans-serif';c.fillStyle='#ff3b3b';c.strokeText(Math.ceil(g.timer),x,y-rr-12);c.fillText(Math.ceil(g.timer),x,y-rr-12)}
   // 飘字
   c.font='bold 14px "Microsoft YaHei",sans-serif';
-  for(const p of g.pops){const x=sX(p.r.x),y=sY(p.r.y-RAD*2-34)-(1.3-p.t)*26;c.globalAlpha=clamp(p.t*2,0,1);c.strokeText(p.text,x,y);c.fillStyle=p.col;c.fillText(p.text,x,y)}c.globalAlpha=1;
+  for(const p of g.pops){const x=snap(sX(p.r.x)),y=snap(sY(p.r.y-RAD*2-34)-(1.3-p.t)*26-(p.r.lblOff||0));c.globalAlpha=clamp(p.t*2,0,1);c.strokeText(p.text,x,y);c.fillStyle=p.col;c.fillText(p.text,x,y)}c.globalAlpha=1;
   // 吞噬者屏幕外提示
   if(sX(g.wallX)<0&&!g.over){const d=Math.round((g.rank[g.rank.length-1].x-g.wallX)/10);c.fillStyle=`rgba(190,75,219,${0.5+0.3*Math.sin(T*6)})`;c.fillRect(0,0,7,VH);c.textAlign='left';c.font='bold 13px "Microsoft YaHei",sans-serif';c.strokeText(`◀ 吞噬者 ${d}m`,14,VH*0.5);c.fillStyle='#f3d9fa';c.fillText(`◀ 吞噬者 ${d}m`,14,VH*0.5);c.textAlign='center'}
   if(g.sudden&&!g.over){c.fillStyle=`rgba(255,0,0,${0.08+0.06*Math.sin(T*8)})`;c.fillRect(0,0,VW,VH)}
