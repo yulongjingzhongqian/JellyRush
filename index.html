@@ -41,7 +41,7 @@ h1 small{font-size:14px;font-weight:400;color:#a9a3d8;margin-left:10px;letter-sp
 #hud{position:fixed;inset:0;pointer-events:none;z-index:5}
 #hud>*{position:absolute}
 #tinfo{left:14px;top:10px;font-size:14px;line-height:1.5;background:rgba(15,12,40,.6);padding:6px 10px;border-radius:8px}
-#tbox{left:50%;top:10px;transform:translateX(-50%);width:min(420px,40vw);background:rgba(15,12,40,.6);border-radius:10px;padding:6px 10px;text-align:center;font-size:14px}
+#tbox{left:0;right:0;margin:0 auto;top:10px;width:min(420px,40vw);background:rgba(15,12,40,.6);border-radius:10px;padding:6px 10px;text-align:center;font-size:14px}
 #tbar{height:8px;background:#2c2752;border-radius:4px;margin-top:5px;overflow:hidden}
 #tfill{height:100%;width:0;background:#ffd34d}
 #ctrl{right:14px;top:10px;pointer-events:auto;display:flex;gap:6px}
@@ -52,7 +52,7 @@ h1 small{font-size:14px;font-weight:400;color:#a9a3d8;margin-left:10px;letter-sp
 #rank .n{width:18px;color:#a9a3d8;text-align:right}
 #feed{left:14px;top:96px;font-size:13px;line-height:1.6}
 #feed div{background:rgba(15,12,40,.6);padding:2px 8px;border-radius:6px;margin-bottom:3px}
-#cmt{left:50%;bottom:20px;transform:translateX(-50%);background:rgba(15,12,40,.72);padding:8px 18px;border-radius:20px;font-size:17px;white-space:nowrap;transition:opacity .25s}
+#cmt{left:0;right:0;margin:0 auto;width:fit-content;bottom:20px;background:rgba(15,12,40,.72);padding:8px 18px;border-radius:20px;font-size:17px;white-space:nowrap;transition:opacity .25s}
 table{border-collapse:collapse;width:100%;max-width:900px;font-size:14px;margin-top:10px}
 td,th{padding:5px 8px;text-align:left;border-bottom:1px solid #2f2a55}
 th{color:#a9a3d8;font-weight:400}
@@ -72,7 +72,7 @@ button,select,label{touch-action:manipulation}
   .card{padding:8px;gap:8px}.row select{padding:4px 2px}
   .card canvas{width:64px;height:64px}
   #ctrl{right:8px;top:8px}#ctrl button{padding:5px 9px;font-size:13px}
-  #tbox{left:8px;right:8px;top:44px;transform:none;width:auto;font-size:13px;padding:5px 8px}
+  #tbox{left:8px;right:8px;top:44px;width:auto;font-size:13px;padding:5px 8px}
   #tinfo{left:8px;top:88px;font-size:11px;padding:4px 7px}
   #rank{right:8px;top:88px;width:112px;font-size:11px;padding:4px 6px}#rank div{height:16px;gap:4px}#rank .n{width:14px}
   #feed{display:none}
@@ -144,7 +144,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const $=id=>document.getElementById(id);
 
 // ================= 常量与数据 =================
-const VERSION='1.1.0'; // 每次发布时手动递增
+const VERSION='1.1.1'; // 每次发布时手动递增
 const V0=300, GRAV=1800, RAD=17, DT=1/60;
 const GRACE=12, TB=165, HARD=205, ABS=240, POINTS=30;
 const ATTRS=[['spd','速度'],['acc','爆发'],['jmp','跳跃'],['sta','耐力'],['bal','稳定'],['luk','幸运']];
@@ -416,7 +416,7 @@ function newGame(cfgs,seed,headless,mapKey){
   const slots=cfgs.map((_,i)=>i);for(let i=N-1;i>0;i--){const j=Math.floor(g.rng()*(i+1));[slots[i],slots[j]]=[slots[j],slots[i]]}
   cfgs.forEach((c,i)=>{
     g.rs.push({id:i,name:c.name,color:c.color,shape:c.shape,hat:c.hat,trait:c.trait,a:Object.assign({},c.a),style:c.style||'jelly',d:c.d||{},
-      x:-20-slots[i]*(120/N),y:0,vx:0,vy:0,avx:0,g:GRAV,onGround:true,state:'run',alive:true,rank:i+1,fi:0,lane:(i%3-1)*5,
+      x:-20-slots[i]*Math.max(120/N,26),y:0,vx:0,vy:0,avx:0,g:GRAV,onGround:true,state:'run',alive:true,rank:i+1,fi:0,lane:(i%3-1)*5,
       stun:0,slide:false,spin:0,form:0,formTg:0,formT:0,boost:0,perfT:0,shield:0,rocket:0,pendCd:0,iceT:0,zoneRef:null,
       tried:null,pass:null,lastSpring:null,fell:false,resT:0,resX:0,stX:0,stT:0,ccT:0,leg:i,sq:0,
       deadT:0,cause:'',st:{stuns:0,falls:0,items:0,perf:0,lead:0,cc:0}});
@@ -664,7 +664,9 @@ function step(g,dt){
 // ================= 渲染 =================
 const cv=$('cv'),ctx=cv.getContext('2d'),nightCv=document.createElement('canvas'),nctx=nightCv.getContext('2d');
 let VW=0,VH=0,DPR=1;
-function resize(){DPR=Math.min(2,window.devicePixelRatio||1);VW=window.innerWidth;VH=window.innerHeight;cv.width=Math.round(VW*DPR);cv.height=Math.round(VH*DPR);nightCv.width=VW;nightCv.height=VH}
+function resize(){DPR=Math.min(3,window.devicePixelRatio||1);VW=window.innerWidth;VH=window.innerHeight;cv.width=Math.round(VW*DPR);cv.height=Math.round(VH*DPR);nightCv.width=VW;nightCv.height=VH;
+  // 画布的显示尺寸精确等于"像素数 ÷ 缩放比"，保证一个画布像素对应一个屏幕像素，不被浏览器二次缩放
+  cv.style.width=cv.width/DPR+'px';cv.style.height=cv.height/DPR+'px'}
 window.addEventListener('resize',resize);resize();
 const SKY=[[[110,190,255],[214,243,255]],[[150,130,225],[255,205,170]],[[40,36,96],[196,110,150]]];
 function skyCol(t,SKY){const p=clamp(t/85,0,1.999),i=Math.floor(p),f=p-i,m=(a,b)=>`rgb(${a.map((v,k)=>Math.round(lerp(v,b[k],f))).join(',')})`;return [m(SKY[i][0],SKY[i+1][0]),m(SKY[i][1],SKY[i+1][1])]}
@@ -674,6 +676,10 @@ function updateCam(g,dt){
   if(g.over&&g.winner)last=lead=g.winner.x;
   const base=clamp(Math.min(VH/700,VW/820),0.42,1.4),left=last-340,span=lead+420-left;
   const z=clamp(VW/span,0.5*base,1.05*base),vw=VW/z,tx=span<vw?left+span/2-vw/2:left,ty=(groundY(g,last)+groundY(g,lead))/2;
+  // 速度前馈：镜头先按目标的移动速度同步前进，再平滑修正剩余误差。
+  // 否则起跑和加速时镜头滞后，选手和名牌会在屏幕上快速滑动，看起来发虚
+  if(c.ptx!=null&&dt>0){const d=tx-c.ptx;if(Math.abs(d)<60)c.x+=d*0.92}
+  c.ptx=tx;
   const k=1-Math.exp(-dt*3.5);c.x+=(tx-c.x)*k;c.y+=(ty-c.y)*k;c.z+=(z-c.z)*k*0.6;
 }
 function updFx(g,dt,real){
@@ -784,11 +790,13 @@ function render(g){
   // 避让高度平滑过渡，避免名次交替时名牌上下跳动
   const snap=v=>Math.round(v*DPR)/DPR,placed=[];
   for(const r of g.rs){if(!r.alive||r.state==='rescue')continue;const x=snap(sX(r.x)),y0=sY(r.y-RAD*2-18)-4;let off=0;
-    for(let k=0;k<6;k++){let hit=false;for(const p of placed)if(Math.abs(p[0]-x)<46&&Math.abs(p[1]-(y0-off))<14){hit=true;break}if(!hit)break;off+=15}
+    for(let k=0;k<16;k++){let hit=false;for(const p of placed)if(Math.abs(p[0]-x)<46&&Math.abs(p[1]-(y0-off))<14){hit=true;break}if(!hit)break;off+=15}
     placed.push([x,y0-off]);r.lblOff=r.lblOff==null?off:r.lblOff+(off-r.lblOff)*0.2;const y=snap(y0-r.lblOff);
     if(x>VW-6){const yy=clamp(sY(r.y-20),80,VH-60);c.fillStyle=r.color;c.beginPath();c.moveTo(VW-4,yy);c.lineTo(VW-18,yy-9);c.lineTo(VW-18,yy+9);c.fill();c.textAlign='right';c.strokeText(r.name,VW-22,yy+4);c.fillStyle='#fff';c.fillText(r.name,VW-22,yy+4);c.textAlign='center';continue}
-    const lead=r.rank===1&&g.aliveN>1;c.strokeText(r.name,x,y);c.fillStyle=lead?'#ffe066':'#fff';c.fillText(r.name,x,y);
-    if(lead){if(r.tagW==null)r.tagW=c.measureText(r.name).width;const sx2=snap(x-r.tagW/2-9);c.strokeText('★',sx2,y);c.fillText('★',sx2,y)}}
+    // 左对齐并把起笔位置对齐到物理像素（居中对齐时起笔位置会落在半个像素上）
+    if(r.tagW==null)r.tagW=c.measureText(r.name).width;const lead=r.rank===1&&g.aliveN>1,lx=snap(x-r.tagW/2);
+    c.textAlign='left';c.strokeText(r.name,lx,y);c.fillStyle=lead?'#ffe066':'#fff';c.fillText(r.name,lx,y);
+    if(lead){c.strokeText('★',lx-16,y);c.fillText('★',lx-16,y)}c.textAlign='center'}
   // 裁决准星
   if(!g.duel&&!g.over&&g.t>=GRACE&&g.timer<3&&g.rank.length>1){const v=g.rank[g.rank.length-1],x=sX(v.x),y=sY(v.y-RAD),rr=30+g.timer*14;c.strokeStyle='#ff3b3b';c.lineWidth=3;c.beginPath();c.arc(x,y,rr,0,6.2832);c.moveTo(x-rr-8,y);c.lineTo(x-rr+10,y);c.moveTo(x+rr+8,y);c.lineTo(x+rr-10,y);c.moveTo(x,y-rr-8);c.lineTo(x,y-rr+10);c.moveTo(x,y+rr+8);c.lineTo(x,y+rr-10);c.stroke();
     c.font='bold 22px sans-serif';c.fillStyle='#ff3b3b';c.strokeText(Math.ceil(g.timer),x,y-rr-12);c.fillText(Math.ceil(g.timer),x,y-rr-12)}
