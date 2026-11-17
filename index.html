@@ -62,6 +62,10 @@ th{color:#a9a3d8;font-weight:400}
 body.watch{cursor:none}
 body.watch #ctrl,body.watch #result .bar{display:none}
 #nextIn{color:#ffd34d;font-size:15px;margin:10px 0}
+#recBox{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:10px 0;padding:10px 14px;border:1px solid #ff6b6b;border-radius:10px;background:rgba(255,107,107,.1);font-size:14px;cursor:default}
+#recBox.hidden{display:none}
+#recBox small{color:#a9a3d8;flex-basis:100%}
+#recBox button{cursor:pointer}
 canvas#cv,#hud{touch-action:manipulation;user-select:none;-webkit-user-select:none}
 button,select,label{touch-action:manipulation}
 /* 小屏（手机）布局 */
@@ -131,6 +135,7 @@ button,select,label{touch-action:manipulation}
     <label>人数 <select id="selN"></select></label>
     <label>种子 <input id="seed" placeholder="留空=随机" size="10"></label>
     <label title="隐藏所有按钮，结算后自动开始下一局；按 Esc 或双击屏幕返回首页"><input type="checkbox" id="chkWatch"> 纯观赏模式</label>
+    <label id="lblRec" class="hidden" title="仅本地运行时可用：录下整局比赛（含声音），结算时可选择导出保存，不导出则自动删除"><input type="checkbox" id="chkRec"> 🎬 录制本局</label>
     <span class="sp"></span>
     <button id="bStart" class="pri" style="font-size:17px;padding:9px 26px">开始比赛 ▶</button>
   </div>
@@ -145,6 +150,7 @@ button,select,label{touch-action:manipulation}
   <div id="champ"><canvas id="champCv" width="240" height="240"></canvas><div><h1 id="champName"></h1><div id="champSub" style="color:#a9a3d8;margin-top:6px"></div></div></div>
   <div class="aw" id="awards"></div>
   <div id="nextIn"></div>
+  <div id="recBox" class="hidden"></div>
   <div class="bar">
     <button id="bAgain" class="pri">再来一局（新种子）</button>
     <button id="bReplay">重播本局</button>
@@ -165,7 +171,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const $=id=>document.getElementById(id);
 
 // ================= 常量与数据 =================
-const VERSION='1.5.0'; // 每次发布时手动递增
+const VERSION='1.6.0'; // 每次发布时手动递增
 const V0=300, GRAV=1800, RAD=17, DT=1/60;
 const GRACE=12, TB=165, HARD=205, ABS=240, POINTS=30;
 const ATTRS=[['spd','速度'],['acc','爆发'],['jmp','跳跃'],['sta','耐力'],['bal','稳定'],['luk','幸运']];
@@ -236,10 +242,10 @@ const ITEMS={boost:'👟 加速鞋',rocket:'🚀 火箭',shield:'🛡 护盾',ba
 const CAUSE={wall:'被吞噬',bolt:'天雷裁决',finish:'决赛落败',cap:'超时判负'};
 
 // ================= 音效 =================
-let AC=null, muted=false, musicOff=false, musicBus=null, noiseBuf=null;
+let AC=null, muted=false, musicOff=false, musicBus=null, outBus=null, noiseBuf=null;
 function audio(){
   if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();
-    const comp=AC.createDynamicsCompressor();musicBus=AC.createGain();musicBus.gain.value=0.6;musicBus.connect(comp);comp.connect(AC.destination);
+    const comp=AC.createDynamicsCompressor();musicBus=AC.createGain();musicBus.gain.value=0.6;outBus=AC.createGain();outBus.connect(AC.destination);musicBus.connect(comp);comp.connect(outBus);
     noiseBuf=AC.createBuffer(1,Math.floor(AC.sampleRate*0.3),AC.sampleRate);const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1}
   return AC;
 }
@@ -247,7 +253,7 @@ function tone(f,d,type,vol,to,delay){
   if(muted)return;
   try{audio();const t=AC.currentTime+(delay||0),o=AC.createOscillator(),g=AC.createGain();
     o.type=type||'sine';o.frequency.setValueAtTime(f,t);if(to)o.frequency.exponentialRampToValueAtTime(to,t+d);
-    g.gain.setValueAtTime(vol||0.08,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+d+0.02)}catch(e){}
+    g.gain.setValueAtTime(vol||0.08,t);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(outBus);o.start(t);o.stop(t+d+0.02)}catch(e){}
 }
 function sfx(g,k){
   if(g.headless||g.silent)return;
@@ -935,17 +941,22 @@ function hud(g,real){
   const cm=$('cmt');
   if(g.msgT<=0){if(g.msgs.length){cm.textContent=g.msgs.shift();cm.style.opacity=1;g.msgT=g.msgs.length>1?1.3:2.4;g.msgHold=true}else if(g.msgHold&&g.msgT<-1.5){cm.style.opacity=0;g.msgHold=false}}
   if(g.hudT>0)return;g.hudT=0.12;
-  $('tinfo').innerHTML=`⏱ ${g.t.toFixed(1)}s　存活 <b>${g.aliveN}</b>/${g.rs.length}<br>${g.map.n}　种子 ${g.seedLabel}${MU.on&&MU.track?`<br>♪ ${MU.track.n}`:''}`;
+  $('tinfo').innerHTML=`⏱ ${g.t.toFixed(1)}s　存活 <b>${g.aliveN}</b>/${g.rs.length}<br>${g.map.n}　种子 ${g.seedLabel}${MU.on&&MU.track?`<br>♪ ${MU.track.n}`:''}${REC.on?'<br><span style="color:#ff6b6b">● 录制中</span>':''}`;
+  const [lab,pct,col]=timerInfo(g);
+  $('tlabel').textContent=lab;$('tfill').style.width=clamp(pct,0,1)*100+'%';$('tfill').style.background=col;
+  let h='';g.rank.forEach((r,i)=>{h+=`<div><span class="n">${i+1}</span><i style="background:${r.color}"></i>${esc(r.name)} ${rankIcons(r)}</div>`});
+  for(let i=g.order.length-1;i>=0;i--){const r=g.order[i];h+=`<div class="dead"><span class="n">${g.rs.length-i}</span><i style="background:${r.color}"></i>${esc(r.name)}</div>`}
+  $('rank').innerHTML=h;$('feed').innerHTML=g.feed.map(s=>`<div>${s}</div>`).join('');
+}
+const rankIcons=r=>(r.rocket>0?'🚀':'')+(r.shield>0?'🛡':'')+(r.stun>0?'💫':'')+(r.state==='rescue'||r.fell?'🕳':'');
+function timerInfo(g){
   let lab,pct,col='#ffd34d';
   if(g.over){lab='🏆 比赛结束';pct=1}
   else if(g.duel){const d=Math.max(0,g.duel.x-g.leadX);lab=`🏁 决赛冲刺　距终点 ${Math.round(d/10)}m`;pct=1-d/(g.duel.x-g.duel.x0);col='#ff8787'}
   else if(g.t<GRACE){lab=`热身期　${(GRACE-g.t).toFixed(0)}s 后开始淘汰`;pct=g.t/GRACE;col='#8ce99a'}
   else{lab=`⚡ 末位裁决　${g.timer.toFixed(1)}s`;pct=g.timer/g.I;if(g.timer<3)col='#ff6b6b'}
   if(g.sudden&&!g.over)lab='☠ 猝死模式　'+lab;
-  $('tlabel').textContent=lab;$('tfill').style.width=clamp(pct,0,1)*100+'%';$('tfill').style.background=col;
-  let h='';g.rank.forEach((r,i)=>{const ic=(r.rocket>0?'🚀':'')+(r.shield>0?'🛡':'')+(r.stun>0?'💫':'')+(r.state==='rescue'||r.fell?'🕳':'');h+=`<div><span class="n">${i+1}</span><i style="background:${r.color}"></i>${esc(r.name)} ${ic}</div>`});
-  for(let i=g.order.length-1;i>=0;i--){const r=g.order[i];h+=`<div class="dead"><span class="n">${g.rs.length-i}</span><i style="background:${r.color}"></i>${esc(r.name)}</div>`}
-  $('rank').innerHTML=h;$('feed').innerHTML=g.feed.map(s=>`<div>${s}</div>`).join('');
+  return [lab,pct,col];
 }
 
 // ================= 设定界面 =================
@@ -1003,6 +1014,66 @@ function bindSetup(){
   $('bStart').onclick=()=>{const s=$('seed').value.trim();watchMode=$('chkWatch').checked;startGame(s===''?null:s)};
 }
 
+// ================= 录制（仅本地运行时可用） =================
+// 画面来自一块离屏画布：每帧把游戏画布贴上去，再补画计时、排名、解说（这些平时是 DOM，录不进画布流）
+const REC_OK=(location.protocol==='file:'||/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname))&&!!window.MediaRecorder&&!!HTMLCanvasElement.prototype.captureStream;
+const REC={on:false,mr:null,cv:null,c:null,blob:null,url:null,aDest:null,saved:false};
+function recMime(){for(const m of ['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'])if(MediaRecorder.isTypeSupported(m))return m;return ''}
+function recStart(){
+  recDiscard();
+  try{
+    audio();const k=Math.min(1,1920/cv.width),w=Math.round(cv.width*k/2)*2,h=Math.round(cv.height*k/2)*2;
+    REC.cv=document.createElement('canvas');REC.cv.width=w;REC.cv.height=h;REC.c=REC.cv.getContext('2d');
+    const st=REC.cv.captureStream(60);
+    if(!REC.aDest){REC.aDest=AC.createMediaStreamDestination();outBus.connect(REC.aDest)}
+    REC.aDest.stream.getAudioTracks().forEach(t=>st.addTrack(t));
+    const mime=recMime(),mr=new MediaRecorder(st,Object.assign({videoBitsPerSecond:6e6,audioBitsPerSecond:128000},mime?{mimeType:mime}:{})),chunks=[];
+    mr.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+    // 被丢弃的录制（REC.mr 已换人或清空）不生成文件
+    mr.onstop=()=>{st.getVideoTracks().forEach(t=>t.stop());if(REC.mr!==mr)return;REC.mr=null;REC.blob=new Blob(chunks,{type:(mr.mimeType||mime||'video/webm').split(';')[0]});recUI()};
+    mr.onerror=()=>{if(REC.mr===mr)recDiscard()};
+    mr.start(1000);REC.mr=mr;REC.on=true;
+  }catch(e){console.warn('录制启动失败',e);REC.on=false;REC.mr=null}
+}
+function recStop(){if(!REC.on)return;REC.on=false;recUI();try{REC.mr.stop()}catch(e){REC.mr=null;recUI()}}
+function recDiscard(){
+  const mr=REC.mr;REC.on=false;REC.mr=null;if(mr&&mr.state!=='inactive')try{mr.stop()}catch(e){}
+  if(REC.url)URL.revokeObjectURL(REC.url);REC.blob=REC.url=REC.cv=REC.c=null;REC.saved=false;recUI();
+}
+// 观赏模式连播时，录像还没处理就先不进下一局
+const recPending=()=>!!(REC.mr&&!REC.on)||!!(REC.blob&&!REC.saved);
+function recUI(){
+  const b=$('recBox');
+  if(REC.mr&&!REC.on){b.classList.remove('hidden');b.textContent='🎬 正在整理录像…';return}
+  if(!REC.blob){b.classList.add('hidden');b.innerHTML='';return}
+  const ext=/mp4/.test(REC.blob.type)?'mp4':'webm';
+  b.classList.remove('hidden');
+  b.innerHTML=`<span>🎬 本局录像已就绪（${ext.toUpperCase()}，${(REC.blob.size/1048576).toFixed(1)} MB）${REC.saved?'　✅ 已导出':''}</span><button id="bRecSave" class="pri">💾 导出保存</button><button id="bRecDel">🗑 删除</button><small>不导出的话，离开结算页（再来一局、重播、返回首页）时录像会自动删除。</small>`;
+  $('bRecSave').onclick=()=>{
+    if(!REC.url)REC.url=URL.createObjectURL(REC.blob);
+    const d=new Date(),z=n=>String(n).padStart(2,'0'),a=document.createElement('a');
+    a.href=REC.url;a.download=`JellyRush_${String(lastSeed).replace(/[^\w一-龥-]/g,'_')}_${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}.${ext}`;
+    document.body.appendChild(a);a.click();a.remove();REC.saved=true;recUI()};
+  $('bRecDel').onclick=recDiscard;
+}
+function recFrame(g,inIntro){
+  if(!REC.on||g.demo)return;const c=REC.c,W=REC.cv.width,H=REC.cv.height;
+  c.setTransform(1,0,0,1,0,0);c.globalAlpha=1;c.drawImage(cv,0,0,W,H);
+  if(inIntro||g.shown)return;
+  const k=W/VW,F='"Microsoft YaHei",sans-serif',box=(x,y,w,h,r,col)=>{c.fillStyle=col||'rgba(15,12,40,.6)';c.beginPath();c.roundRect(x,y,w,h,r);c.fill()};
+  c.setTransform(k,0,0,H/VH,0,0);c.textBaseline='middle';c.textAlign='left';c.font='14px '+F;
+  const l1=`⏱ ${g.t.toFixed(1)}s　存活 ${g.aliveN}/${g.rs.length}`,l2=`${g.map.n}　种子 ${lastSeed}`;
+  box(14,10,Math.max(c.measureText(l1).width,c.measureText(l2).width)+20,54,8);c.fillStyle='#fff';c.fillText(l1,24,27);c.fillText(l2,24,48);
+  const [lab,pct,col]=timerInfo(g),bw=Math.min(420,VW*0.4),bx=(VW-bw)/2;
+  box(bx,10,bw,46,10);c.fillStyle='#fff';c.textAlign='center';c.fillText(lab,VW/2,25);
+  box(bx+10,40,bw-20,8,4,'#2c2752');if(pct>0.01)box(bx+10,40,(bw-20)*clamp(pct,0,1),8,4,col);
+  const rx=VW-190;let y=70;box(rx,54,176,g.rs.length*20+12,10);c.font='13px '+F;
+  const row=(n,r,dead)=>{c.globalAlpha=dead?0.4:1;c.textAlign='right';c.fillStyle='#a9a3d8';c.fillText(n,rx+26,y);c.fillStyle=r.color;c.beginPath();c.arc(rx+37,y,5,0,7);c.fill();
+    c.textAlign='left';c.fillStyle='#fff';c.fillText(r.name+(dead?'':' '+rankIcons(r)),rx+48,y,122);y+=20};
+  g.rank.forEach((r,i)=>row(i+1,r,false));for(let i=g.order.length-1;i>=0;i--)row(g.rs.length-i,g.order[i],true);c.globalAlpha=1;
+  const cm=$('cmt');if(+cm.style.opacity>0&&cm.textContent){c.font='17px '+F;c.textAlign='center';const tw=c.measureText(cm.textContent).width;box((VW-tw)/2-18,VH-58,tw+36,38,19,'rgba(15,12,40,.72)');c.fillStyle='#fff';c.fillText(cm.textContent,VW/2,VH-39)}
+}
+
 // ================= 流程 =================
 let game=null,paused=false,speedMul=1,lastSeed=null,lastTs=0,watchMode=false;
 function startGame(seedStr){
@@ -1017,6 +1088,7 @@ function startGame(seedStr){
   paused=false;$('bPause').textContent='暂停';document.body.classList.toggle('watch',watchMode);
   if(watchMode){speedMul=1;$('bSpeed').textContent='1×'}
   introInit(game);$('hud').classList.add('hidden');musicStart(mapKey,seedNum);
+  if(REC_OK&&$('chkRec').checked)recStart();else recDiscard();
   $('home').classList.add('hidden');$('setup').classList.add('hidden');$('result').classList.add('hidden');$('cmt').style.opacity=0;
   say(game,`比赛开始！${game.rs.length} 名选手，最后只能留下一个！`);
 }
@@ -1030,7 +1102,7 @@ function showResult(g){
   $('rtable').innerHTML='<tr><th>名次</th><th>选手</th><th>特性</th><th>存活</th><th>结局</th><th>摔倒/被控</th><th>掉坑</th><th>道具</th><th>完美</th><th>领跑</th></tr>'+
     all.map((r,i)=>`<tr><td>${i+1}</td><td><b style="color:${r.color}">${esc(fullName(r))}</b></td><td>${TRAITS[r.trait][0]}</td><td>${(r.alive?g.t:r.deadT).toFixed(1)}s</td><td>${r.alive?'🏆 冠军':CAUSE[r.cause]}</td><td>${r.st.stuns}</td><td>${r.st.falls}</td><td>${r.st.items}</td><td>${r.st.perf}</td><td>${r.st.lead.toFixed(1)}s</td></tr>`).join('');
   $('result').classList.remove('hidden');$('hud').classList.add('hidden');$('result').scrollTop=0;
-  g.nextT=watchMode?10:0;$('nextIn').textContent='';
+  g.nextT=watchMode?10:0;$('nextIn').textContent='';recStop();
 }
 // 首页背景：用全部资源包混搭的 12 名角色跑一局静音的演示比赛
 function startDemo(){
@@ -1039,8 +1111,8 @@ function startDemo(){
   game.demo=game.silent=true;game.pre=0;game.intro=game.introDur=0;game.seedLabel='';paused=false;
 }
 function showHome(){
-  musicStop();watchMode=false;document.body.classList.remove('watch');for(const id of ['hud','result','setup'])$(id).classList.add('hidden');$('home').classList.remove('hidden');
-  $('homeInfo').textContent=`当前配置：${roster.length} 人 · ${curPack==='mix'?'全部混搭':PACKS[curPack].n} · 地图 ${$('selMap').selectedOptions[0].textContent}${$('chkWatch').checked?' · 纯观赏模式':''}`;
+  musicStop();recDiscard();watchMode=false;document.body.classList.remove('watch');for(const id of ['hud','result','setup'])$(id).classList.add('hidden');$('home').classList.remove('hidden');
+  $('homeInfo').textContent=`当前配置：${roster.length} 人 · ${curPack==='mix'?'全部混搭':PACKS[curPack].n} · 地图 ${$('selMap').selectedOptions[0].textContent}${$('chkWatch').checked?' · 纯观赏模式':''}${REC_OK&&$('chkRec').checked?' · 🎬 录制':''}`;
   startDemo();
 }
 function openSetup(){game=null;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,cv.width,cv.height);$('home').classList.add('hidden');$('setup').classList.remove('hidden')}
@@ -1058,15 +1130,17 @@ function frame(ts){
           if(Math.random()<0.5)burst(g,g.winner.x+(Math.random()-0.5)*500,g.winner.y-320,`hsl(${Math.random()*360},90%,65%)`,4,160,500)}}
       updateCam(g,real);updFx(g,real*sc,real);
     }
-    render(g);if(g.intro<g.introDur){drawIntro(g);requestAnimationFrame(frame);return}
+    render(g);const inIntro=g.intro<g.introDur;if(inIntro)drawIntro(g);recFrame(g,inIntro);if(inIntro){requestAnimationFrame(frame);return}
     if(g.demo){if(g.over&&g.overT>2.5)startDemo()} // 首页背景的演示比赛：不显示界面，结束后自动换一局
     else if(!g.shown)hud(g,paused?0:real);
+    else if(watchMode&&!paused&&recPending())$('nextIn').textContent='录像待处理：导出或删除后继续自动连播';
     else if(watchMode&&!paused){g.nextT-=real;$('nextIn').textContent=`${Math.max(1,Math.ceil(g.nextT))} 秒后自动开始下一局（Esc 或双击屏幕返回首页）`;if(g.nextT<=0)startGame(null)}
   }
   requestAnimationFrame(frame);
 }
 $('bSpeed').onclick=()=>{speedMul=speedMul===1?2:speedMul===2?4:1;$('bSpeed').textContent=speedMul+'×'};
-$('bPause').onclick=()=>{paused=!paused;$('bPause').textContent=paused?'继续':'暂停'};
+$('bPause').onclick=()=>{paused=!paused;$('bPause').textContent=paused?'继续':'暂停';
+  if(REC.on)try{paused?REC.mr.pause():REC.mr.resume()}catch(e){}};
 // 声音按钮三档循环：全开 → 只关音乐 → 全部静音
 $('bMute').onclick=()=>{if(!musicOff)musicOff=true;else if(!muted)muted=true;else muted=musicOff=false;$('bMute').textContent=muted?'🔇':musicOff?'🔈':'🔊';$('bMute').title=muted?'已静音':musicOff?'仅音效':'音乐+音效'};
 // 浏览器要求先有用户操作才能出声：任何点击或按键都尝试恢复音频
@@ -1100,6 +1174,7 @@ try{const p=localStorage.getItem('jellyPack');if(p==='mix'||PACKS[p])curPack=p;
   if(Array.isArray(s)&&s.length>=2&&s.every(r=>r&&r.a&&TRAITS[r.trait]&&HATS[r.hat]&&SHAPES[r.shape]&&PACKS[r.style]&&(r.style==='jelly'||PACKS[r.style].list[r.ci])))roster=s.slice(0,16)}catch(e){}
 $('ver').textContent=$('homeVer').textContent='v'+VERSION;
 bindSetup();
+if(REC_OK)$('lblRec').classList.remove('hidden');
 if(roster.length>maxCount())roster.length=maxCount();
 if(roster.length<2){roster=[];setCount(8)}else renderSetup();
 requestAnimationFrame(frame);
