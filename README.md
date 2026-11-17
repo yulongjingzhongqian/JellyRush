@@ -7,7 +7,7 @@
 ## 在线游玩🔗:
 https://yulongjingzhongqian.github.io/JellyRush/
 
-纯观赏模式自动连播🔗：
+## 纯观赏模式自动连播🔗：
 https://yulongjingzhongqian.github.io/JellyRush/?watch
 
 ### 启用 GitHub Pages
