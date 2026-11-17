@@ -5,14 +5,10 @@
 整个游戏只有一个 `index.html`，没有依赖，也不需要构建。
 
 ## 在线游玩🔗:
-
 https://yulongjingzhongqian.github.io/JellyRush/
 
 纯观赏模式自动连播🔗：
-
-```
 https://yulongjingzhongqian.github.io/JellyRush/?watch
-```
 
 ### 启用 GitHub Pages
 
