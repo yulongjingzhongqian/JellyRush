@@ -159,6 +159,7 @@ button,select,label{touch-action:manipulation}
   <table id="rtable"></table>
 </div>
 
+<script src="icons/ai/icons.js"></script>
 <script>
 'use strict';
 // ================= 工具 =================
@@ -171,7 +172,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const $=id=>document.getElementById(id);
 
 // ================= 常量与数据 =================
-const VERSION='1.6.0'; // 每次发布时手动递增
+const VERSION='1.6.1'; // 每次发布时手动递增
 const V0=300, GRAV=1800, RAD=17, DT=1/60;
 const GRACE=12, TB=165, HARD=205, ABS=240, POINTS=30;
 const ATTRS=[['spd','速度'],['acc','爆发'],['jmp','跳跃'],['sta','耐力'],['bal','稳定'],['luk','幸运']];
@@ -217,7 +218,10 @@ const ICONS={};
 function aiIcon(slug){
   if(!slug)return null;let e=ICONS[slug];
   if(!e){const dot=slug.includes('.');e=ICONS[slug]={img:new Image(),ok:false,ext:dot?['']:['.svg','.png']}; // 文件名自带扩展名时直接用
-    const next=()=>{const x=e.ext.shift();if(x!=null)e.img.src=`icons/ai/${slug}${x}`};
+    // 本地双击打开（file://）时，直接加载的图片文件会污染画布，导致录制只有声音没有画面；
+    // 这时只用 icons/ai/icons.js 里内嵌的 data URI（由 icons/ai/pack.py 生成），没有就回退到自绘徽记
+    if(location.protocol==='file:'){const u=(window.AI_ICONS||{})[slug.replace(/\.\w+$/,'')];e.ext=u?[u]:[]}
+    const next=()=>{const x=e.ext.shift();if(x!=null)e.img.src=x.startsWith('data:')?x:`icons/ai/${slug}${x}`};
     e.img.onload=()=>{e.ok=e.img.naturalWidth>0;if(e.ok&&typeof refreshPreviews==='function')refreshPreviews()};e.img.onerror=next;next()}
   return e.ok?e.img:null;
 }
@@ -1021,6 +1025,8 @@ const REC={on:false,mr:null,cv:null,c:null,blob:null,url:null,aDest:null,saved:f
 function recMime(){for(const m of ['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'])if(MediaRecorder.isTypeSupported(m))return m;return ''}
 function recStart(){
   recDiscard();
+  // 画布一旦被跨源图片污染，画面流就是空的（只剩声音）：提前发现并说明，而不是录出一份没有画面的文件
+  try{ctx.getImageData(0,0,1,1)}catch(e){REC.err='本局没有录制：画布被本地图片文件污染，浏览器不允许录下画面。请运行 python icons/ai/pack.py 后刷新页面再试。';return}
   try{
     audio();const k=Math.min(1,1920/cv.width),w=Math.round(cv.width*k/2)*2,h=Math.round(cv.height*k/2)*2;
     REC.cv=document.createElement('canvas');REC.cv.width=w;REC.cv.height=h;REC.c=REC.cv.getContext('2d');
@@ -1038,14 +1044,14 @@ function recStart(){
 function recStop(){if(!REC.on)return;REC.on=false;recUI();try{REC.mr.stop()}catch(e){REC.mr=null;recUI()}}
 function recDiscard(){
   const mr=REC.mr;REC.on=false;REC.mr=null;if(mr&&mr.state!=='inactive')try{mr.stop()}catch(e){}
-  if(REC.url)URL.revokeObjectURL(REC.url);REC.blob=REC.url=REC.cv=REC.c=null;REC.saved=false;recUI();
+  if(REC.url)URL.revokeObjectURL(REC.url);REC.blob=REC.url=REC.cv=REC.c=REC.err=null;REC.saved=false;recUI();
 }
 // 观赏模式连播时，录像还没处理就先不进下一局
 const recPending=()=>!!(REC.mr&&!REC.on)||!!(REC.blob&&!REC.saved);
 function recUI(){
   const b=$('recBox');
   if(REC.mr&&!REC.on){b.classList.remove('hidden');b.textContent='🎬 正在整理录像…';return}
-  if(!REC.blob){b.classList.add('hidden');b.innerHTML='';return}
+  if(!REC.blob){b.classList.toggle('hidden',!REC.err);b.textContent=REC.err?'⚠ '+REC.err:'';return}
   const ext=/mp4/.test(REC.blob.type)?'mp4':'webm';
   b.classList.remove('hidden');
   b.innerHTML=`<span>🎬 本局录像已就绪（${ext.toUpperCase()}，${(REC.blob.size/1048576).toFixed(1)} MB）${REC.saved?'　✅ 已导出':''}</span><button id="bRecSave" class="pri">💾 导出保存</button><button id="bRecDel">🗑 删除</button><small>不导出的话，离开结算页（再来一局、重播、返回首页）时录像会自动删除。</small>`;

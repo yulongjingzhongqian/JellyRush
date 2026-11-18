@@ -24,6 +24,16 @@
 | Llama | `llama.svg` |
 | Copilot | `copilot.svg` |
 
+## 增删或替换图标后要重新打包
+
+```bash
+python icons/ai/pack.py
+```
+
+它把本目录的图标内嵌进 `icons.js`。双击打开 `index.html`（`file://`）时游戏只读 `icons.js`，不直接读图片文件：浏览器把本地图片文件当作跨源资源，画到画布上会让录制功能只录到声音、录不到画面。通过网址访问（GitHub Pages、`localhost`）时仍然直接读图片文件，不依赖 `icons.js`。
+
+没有重新打包的话，本地打开时看到的是旧图标；新加的图标则显示为自绘徽记。
+
 要增加角色，需要同时在 `index.html` 的 `PACKS.ai` 列表里加一项，并在这里放入对应文件。
 
 ## 关于商标
