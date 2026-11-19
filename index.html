@@ -40,7 +40,7 @@ h1 small{font-size:14px;font-weight:400;color:#a9a3d8;margin-left:10px;letter-sp
 .rules{font-size:13px;color:#b9b3e6;line-height:1.7;margin-top:14px;max-width:980px}
 #hud{position:fixed;inset:0;pointer-events:none;z-index:5}
 #hud>*{position:absolute}
-#tinfo{left:14px;top:10px;font-size:14px;line-height:1.5;background:rgba(15,12,40,.6);padding:6px 10px;border-radius:8px}
+#tinfo{left:14px;top:96px;font-size:14px;line-height:1.5;background:rgba(15,12,40,.6);padding:6px 10px;border-radius:8px}
 #tbox{left:0;right:0;margin:0 auto;top:10px;width:min(420px,40vw);background:rgba(15,12,40,.6);border-radius:10px;padding:6px 10px;text-align:center;font-size:14px}
 #tbar{height:8px;background:#2c2752;border-radius:4px;margin-top:5px;overflow:hidden}
 #tfill{height:100%;width:0;background:#ffd34d}
@@ -50,7 +50,9 @@ h1 small{font-size:14px;font-weight:400;color:#a9a3d8;margin-left:10px;letter-sp
 #rank i{width:10px;height:10px;border-radius:50%;flex:none}
 #rank .dead{opacity:.4;text-decoration:line-through}
 #rank .n{width:18px;color:#a9a3d8;text-align:right}
-#feed{left:14px;top:96px;font-size:13px;line-height:1.6}
+#tips{right:200px;top:62px;width:240px;background:rgba(15,12,40,.72);border-left:3px solid #ffd34d;border-radius:8px;padding:6px 10px;font-size:13px;line-height:1.5;transition:opacity .35s}
+#tips b{display:block;font-size:13px}
+#feed{left:14px;top:204px;font-size:13px;line-height:1.6}
 #feed div{background:rgba(15,12,40,.6);padding:2px 8px;border-radius:6px;margin-bottom:3px}
 #cmt{left:0;right:0;margin:0 auto;width:fit-content;bottom:20px;background:rgba(15,12,40,.72);padding:8px 18px;border-radius:20px;font-size:17px;white-space:nowrap;transition:opacity .25s}
 table{border-collapse:collapse;width:100%;max-width:900px;font-size:14px;margin-top:10px}
@@ -82,6 +84,7 @@ button,select,label{touch-action:manipulation}
   #tinfo{left:8px;top:88px;font-size:11px;padding:4px 7px}
   #rank{right:8px;top:88px;width:112px;font-size:11px;padding:4px 6px}#rank div{height:16px;gap:4px}#rank .n{width:14px}
   #feed{display:none}
+  #tips{left:8px;right:128px;width:auto;top:172px;font-size:11px;padding:4px 7px}#tips b{font-size:11px}
   #rank{top:106px}
   #cmt{font-size:13px;white-space:normal;text-align:center;width:max-content;max-width:92vw;bottom:12px;padding:6px 12px}
   #rtable{font-size:12px}td,th{padding:4px 5px;white-space:nowrap}
@@ -112,6 +115,7 @@ button,select,label{touch-action:manipulation}
     <button id="bSpeed">1×</button><button id="bPause">暂停</button><button id="bMute">🔊</button><button id="bQuit">退出</button>
   </div>
   <div id="rank"></div>
+  <div id="tips"><b id="tipTag"></b><span id="tipTxt"></span></div>
   <div id="feed"></div>
   <div id="cmt"></div>
 </div>
@@ -174,7 +178,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const $=id=>document.getElementById(id);
 
 // ================= 常量与数据 =================
-const VERSION='1.7.1'; // 每次发布时手动递增
+const VERSION='1.8.1'; // 每次发布时手动递增
 const V0=300, GRAV=1800, RAD=17, DT=1/60;
 const GRACE=12, TB=165, HARD=205, ABS=240, POINTS=30;
 const ATTRS=[['spd','速度'],['acc','爆发'],['jmp','跳跃'],['sta','耐力'],['bal','稳定'],['luk','幸运']];
@@ -1024,11 +1028,44 @@ function drawFinale(g){
   c.globalAlpha=1;
 }
 
+// ================= 播报框：随机轮播特性 / 地形 / 宝箱道具的说明 =================
+const TIP_DUR=7,TIP_FADE=0.4;
+const TIP_TER={gap:['🕳 深坑','起跳飞跃，跳不过去就掉进坑里，被救起会损失不少时间'],hurdle:['🚧 路障','起跳翻越，失败会被绊倒'],spring:['🌀 弹簧','踩上去被弹飞一大段，可能完美弹射，也可能弹歪'],
+  pend:['🔨 摆锤','被砸中会向后击飞，运气好能闪避'],mud:['🟤 泥沼','大幅减速，耐力高的受影响小'],ice:['🧊 冰面','跑得更快，但随时可能打滑摔倒'],belt:['⏩ 传送带','顺向推着跑，逆向往回拖'],
+  wind:['💨 风区','顶风减速，耐力高的受影响小'],rocks:['⚠ 落石区','头顶不断掉石头，被砸中会倒地'],slope:['⛰ 坡道','上坡减速，下坡加速']};
+const TIP_ITEM={boost:'2 秒多的大幅加速',rocket:'腾空飞行，越过沿途所有障碍；排名越靠后越容易开出',shield:'10 秒内抵挡一次伤害',banana:'丢在身后，后面踩到的人会滑倒',
+  bolt:'召唤闪电劈向第一名；自己领跑时劈第二名',swap:'和前一名互换位置，越靠后越容易开出',bomb:'当场爆炸把自己炸飞；幸运越高越少见，福星不会开出'};
+function tipDeck(g){
+  const d=[],seen={};
+  for(const r of g.rs)if(!seen[r.trait]){seen[r.trait]=1;d.push({k:'特性',col:'#8ce99a',trait:r.trait})} // 只讲本局出现的特性
+  for(const k in TIP_TER)if((g.map.w[k]??1)>0)d.push({k:'地形',col:'#74c0fc',t:TIP_TER[k][0],x:TIP_TER[k][1]}); // 只讲这张地图会出现的地形
+  d.push({k:'宝箱',col:'#ffd34d',t:'🎁 宝箱',x:'路过就有机会开出一件道具，幸运越高机会越大'});
+  for(const k in TIP_ITEM)d.push({k:'宝箱',col:'#ffd34d',t:ITEMS[k],x:TIP_ITEM[k]});
+  // 展示顺序与比赛随机数无关，不影响同种子重现
+  for(let i=d.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[d[i],d[j]]=[d[j],d[i]]}
+  return d;
+}
+function tipTick(g,real){
+  if(!g.tips){g.tips=tipDeck(g);g.tipI=-1;g.tipT=0;g.tip=null}
+  g.tipT-=real;
+  if(g.tipT<=0){
+    for(let n=0;n<g.tips.length;n++){
+      g.tipI=(g.tipI+1)%g.tips.length;const e=g.tips[g.tipI];
+      if(!e.trait){g.tip=e;break}
+      const own=g.rank.filter(r=>r.trait===e.trait).map(r=>r.name);if(!own.length)continue; // 拥有者都出局了就跳过
+      g.tip={k:e.k,col:e.col,t:TRAITS[e.trait][0],x:`${TRAITS[e.trait][1]}（${own.slice(0,3).join('、')}${own.length>3?' 等':''}）`};break}
+    g.tipT=TIP_DUR;
+    if(g.tip){$('tipTag').textContent=`${g.tip.k} · ${g.tip.t}`;$('tipTag').style.color=g.tip.col;$('tipTxt').textContent=g.tip.x;$('tips').style.borderLeftColor=g.tip.col}
+  }
+  $('tips').style.opacity=g.tip&&!g.over&&g.tipT>TIP_FADE?1:0;
+}
+
 // ================= HUD =================
 function hud(g,real){
   g.hudT-=real;g.msgT-=real;
   const cm=$('cmt');
   if(g.msgT<=0){if(g.msgs.length){cm.textContent=g.msgs.shift();cm.style.opacity=1;g.msgT=g.msgs.length>1?1.3:2.4;g.msgHold=true}else if(g.msgHold&&g.msgT<-1.5){cm.style.opacity=0;g.msgHold=false}}
+  tipTick(g,real);
   if(g.hudT>0)return;g.hudT=0.12;
   $('tinfo').innerHTML=`⏱ ${g.t.toFixed(1)}s　存活 <b>${g.aliveN}</b>/${g.rs.length}<br>${g.map.n}　种子 ${g.seedLabel}${MU.on&&MU.track?`<br>♪ ${MU.track.n}`:''}${REC.on?'<br><span style="color:#ff6b6b">● 录制中</span>':''}`;
   const [lab,pct,col]=timerInfo(g);
@@ -1152,7 +1189,7 @@ function recFrame(g,inIntro){
   const k=W/VW,F='"Microsoft YaHei",sans-serif',box=(x,y,w,h,r,col)=>{c.fillStyle=col||'rgba(15,12,40,.6)';c.beginPath();c.roundRect(x,y,w,h,r);c.fill()};
   c.setTransform(k,0,0,H/VH,0,0);c.textBaseline='middle';c.textAlign='left';c.font='14px '+F;
   const l1=`⏱ ${g.t.toFixed(1)}s　存活 ${g.aliveN}/${g.rs.length}`,l2=`${g.map.n}　种子 ${lastSeed}`;
-  box(14,10,Math.max(c.measureText(l1).width,c.measureText(l2).width)+20,54,8);c.fillStyle='#fff';c.fillText(l1,24,27);c.fillText(l2,24,48);
+  box(14,96,Math.max(c.measureText(l1).width,c.measureText(l2).width)+20,54,8);c.fillStyle='#fff';c.fillText(l1,24,113);c.fillText(l2,24,134);
   const [lab,pct,col]=timerInfo(g),bw=Math.min(420,VW*0.4),bx=(VW-bw)/2;
   box(bx,10,bw,46,10);c.fillStyle='#fff';c.textAlign='center';c.fillText(lab,VW/2,25);
   box(bx+10,40,bw-20,8,4,'#2c2752');if(pct>0.01)box(bx+10,40,(bw-20)*clamp(pct,0,1),8,4,col);
@@ -1160,6 +1197,11 @@ function recFrame(g,inIntro){
   const row=(n,r,dead)=>{c.globalAlpha=dead?0.4:1;c.textAlign='right';c.fillStyle='#a9a3d8';c.fillText(n,rx+26,y);c.fillStyle=r.color;c.beginPath();c.arc(rx+37,y,5,0,7);c.fill();
     c.textAlign='left';c.fillStyle='#fff';c.fillText(r.name+(dead?'':' '+rankIcons(r)),rx+48,y,122);y+=20};
   g.rank.forEach((r,i)=>row(i+1,r,false));for(let i=g.order.length-1;i>=0;i--)row(g.rs.length-i,g.order[i],true);c.globalAlpha=1;
+  if(g.tip&&!g.over){const a=clamp(Math.min(g.tipT/TIP_FADE,(TIP_DUR-g.tipT)/TIP_FADE),0,1),tw=240,tx=rx-10-tw,lines=[];let cur='';
+    c.font='13px '+F;for(const ch of g.tip.x){if(c.measureText(cur+ch).width>tw-23){lines.push(cur);cur=''}cur+=ch}if(cur)lines.push(cur);
+    c.globalAlpha=a;box(tx,62,tw,32+lines.length*19.5,8,'rgba(15,12,40,.72)');box(tx,62,3,32+lines.length*19.5,1.5,g.tip.col);
+    c.textAlign='left';c.font='bold 13px '+F;c.fillStyle=g.tip.col;c.fillText(`${g.tip.k} · ${g.tip.t}`,tx+13,78,tw-23);
+    c.font='13px '+F;c.fillStyle='#fff';lines.forEach((l,i)=>c.fillText(l,tx+13,98+i*19.5));c.globalAlpha=1}
   const cm=$('cmt');if(+cm.style.opacity>0&&cm.textContent){c.font='17px '+F;c.textAlign='center';const tw=c.measureText(cm.textContent).width;box((VW-tw)/2-18,VH-58,tw+36,38,19,'rgba(15,12,40,.72)');c.fillStyle='#fff';c.fillText(cm.textContent,VW/2,VH-39)}
 }
 
